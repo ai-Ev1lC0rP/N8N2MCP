@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  agent-marketplace:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:-your-secret-key-here}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-encryption-key-here}
+      - N8N_BASE_URL=${N8N_BASE_URL:-https://your-n8n-instance.com}
+      - X_N8N_API_KEY=${X_N8N_API_KEY:-your-n8n-api-key}
+    volumes:
+      - ./database:/app/database
+    restart: unless-stopped 

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI Agent Marketplace{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background: radial-gradient(circle at 50% 20%, #302b63 0%, #0f0c29 50%, #000 100%);
+            min-height: 100vh;
+            color: #e5e5e5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            color: #4a5568;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+        }
+
+        .back-btn:hover {
+            background-color: rgba(74, 85, 104, 0.1);
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #4c51bf;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4c51bf;
+            width: 33.33%;
+            border-radius: 2px;
+        }
+
+        .main-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #f8f8f8;
+            margin-bottom: 8px;
+            text-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff;
+        }
+
+        .main-title .highlight {
+            color: #4c51bf;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        /* Search and Categories */
+        .search-section {
+            background: rgba(26, 26, 46, 0.8);
+            backdrop-filter: blur(10px);
+            border: 2px solid #4e4e7a;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 20px rgba(131, 58, 180, 0.3);
+        }
+
+        .search-bar {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #4e4e7a;
+            background: #1b1b30;
+            color: #e5e5e5;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-family: 'Press Start 2P', monospace;
+            margin-bottom: 20px;
+            transition: border-color 0.2s;
+            line-height: 1.4;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .search-bar:focus {
+            outline: none;
+            border-color: #e21aff;
+            box-shadow: 0 0 10px rgba(226, 26, 255, 0.3);
+        }
+
+        .search-bar::placeholder {
+            color: #8a8aa0;
+            font-family: 'Press Start 2P', monospace;
+            text-align: left;
+        }
+
+        .categories {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            padding: 0 10px;
+        }
+
+        .category-btn {
+            padding: 12px 28px;
+            border: 3px solid #4e4e7a;
+            background: #1b1b30;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 700;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 10px;
+            color: #c3c3ff;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            box-shadow: 0 0 6px rgba(255,255,255,0.05);
+        }
+
+        .category-btn:hover,
+        .category-btn.active {
+            background: linear-gradient(90deg, #833ab4 0%, #ff0099 100%);
+            border-color: #e21aff;
+            color: #fff;
+            box-shadow: 0 0 8px #ff00ff, 0 0 18px #833ab4;
+        }
+
+        /* Agent Grid */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .agent-card {
+            background: #1a1a2e;
+            border: 3px solid #833ab4;
+            box-shadow: 0 0 8px #833ab4, 0 0 20px #d122e3;
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .agent-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 0 12px #e21aff, 0 0 30px #e21aff;
+        }
+
+        .agent-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #4c51bf, #667eea);
+        }
+
+        .agent-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+            display: block;
+        }
+
+        .agent-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #f8f8f8;
+            margin-bottom: 8px;
+            line-height: 1.3;
+            text-shadow: 0 0 5px #ff00ff, 0 0 10px #00ffff;
+        }
+
+        .agent-description {
+            color: #718096;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .agent-category {
+            display: inline-block;
+            background: rgba(76, 81, 191, 0.1);
+            color: #4c51bf;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .trending-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: #f56565;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: #e21aff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: 0 0 10px #e21aff, 0 0 20px #833ab4;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(76, 81, 191, 0.4);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid #e2e8f0;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #2d3748;
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #718096;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .close-btn:hover {
+            background-color: #f7fafc;
+            color: #4a5568;
+        }
+
+        .embed-code {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.6rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            color: #2d3748;
+        }
+
+        .copy-btn {
+            background: #4c51bf;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            margin-top: 8px;
+        }
+
+        .copy-btn:hover {
+            background: #4338ca;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .header {
+                padding: 15px 20px;
+            }
+
+            .main-title {
+                font-size: 2rem;
+            }
+
+            .agents-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+
+            .categories {
+                justify-content: center;
+            }
+
+            .category-btn {
+                padding: 8px 16px;
+                font-size: 0.875rem;
+            }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+    
+    <script>
+        // Common JavaScript functionality
+        function showModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        function hideModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show success message
+                const toast = document.createElement('div');
+                toast.textContent = 'Copied to clipboard!';
+                toast.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #48bb78;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    z-index: 10000;
+                    animation: slideIn 0.3s ease;
+                `;
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.remove();
+                }, 2000);
+            });
+        }
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html> 
