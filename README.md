@@ -8,11 +8,17 @@ Convert N8N agent / workflow into MCP servers, you can use it in Claude / Cursor
 
 ## Features
 🚀 MCP Server Creation : Convert your N8N workflow into MCP server for your agent to use
+
 🎯 Easy Deployment: Direct deployment to your n8n instance without credential storage
+
 🚀 My Workflows: Manage your uploaded and deployed workflows & MCP servers
+
 📊 Real-time Configuration: Configure credentials and deploy workflows instantly
+
 🔗 n8n Compatible: Designed to work seamlessly with n8n workflow automation
+
 🔒 Secure Credential Handling: User API keys are transmitted once during deployment and never stored server-side
+
 📤 Workflow Upload: Upload your own n8n workflows and create your MCP servers link
 
 ## Install 
