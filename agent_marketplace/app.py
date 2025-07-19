@@ -9,8 +9,8 @@ from n8n_workflow_parser import N8NWorkflowParser
 from database import db_manager
 from dotenv import load_dotenv  # type: ignore
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from parent directory .env file
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
@@ -107,7 +107,6 @@ def parse_workflow():
             'suggested_endpoint': suggested_endpoint,
             'routing_info': {
                 'user_upload_endpoint': '/api/save-user-uploaded-workflow',
-                'marketplace_endpoint': '/api/save-workflow-to-marketplace'
             }
         })
     
@@ -183,7 +182,6 @@ def parse_workflow_file():
             'suggested_endpoint': suggested_endpoint,
             'routing_info': {
                 'user_upload_endpoint': '/api/save-user-uploaded-workflow',
-                'marketplace_endpoint': '/api/save-workflow-to-marketplace'
             }
         })
     
@@ -397,23 +395,47 @@ def import_n8n_template_enhanced():
         # Save workflow to database - save to BOTH n8n_workflows and user_workflows
         credentials_required = [cred.service_name for cred in parsed_workflow.required_credentials]
         
+        # Enhanced duplicate check across all sources
+        existing_workflows = db_manager.get_user_uploaded_workflows(user_id, None)
+        template_already_exists = False
+        existing_workflow = None
+        
+        for existing in existing_workflows:
+            # Check by template_id, workflow name, or workflow content similarity
+            if (existing.get('template_id') == template_id or 
+                existing.get('workflow_name') == template_name):
+                template_already_exists = True
+                existing_workflow = existing
+                print(f"🔍 N8N template '{template_name}' (ID: {template_id}) already exists for user with source: {existing.get('source', 'unknown')}")
+                break
+        
         # save to user_workflows table (user's personal workflow management)
-        try:
-            print(f"🔍 DEBUG: Saving workflow with name: '{template_name}'")
-            db_manager.save_user_uploaded_workflow(
-                user_id=user_id,
-                workflow_name=template_name,
-                workflow_json=workflow_data,
-                workflow_description=f"N8N template imported from {template_url}",
-                credentials_required=credentials_required,
-                user_jwt=None,
-                n8n_workflow_id=n8n_workflow_id,
-                template_id=template_id,
-                source_override='n8n_template'
-            )
-            print(f"✅ Also saved N8N template to user_workflows for user management")
-        except Exception as user_save_error:
-            print(f"⚠️ Warning: Failed to save N8N template to user_workflows: {user_save_error}")
+        if not template_already_exists:
+            try:
+                print(f"🔍 DEBUG: Saving workflow with name: '{template_name}'")
+                db_manager.save_user_uploaded_workflow(
+                    user_id=user_id,
+                    workflow_name=template_name,
+                    workflow_json=workflow_data,
+                    workflow_description=f"N8N template imported from {template_url}",
+                    credentials_required=credentials_required,
+                    user_jwt=None,
+                    n8n_workflow_id=n8n_workflow_id,
+                    template_id=template_id,
+                    source_override='n8n_template'
+                )
+                print(f"✅ Saved N8N template to user_workflows for user management")
+            except Exception as user_save_error:
+                print(f"⚠️ Warning: Failed to save N8N template to user_workflows: {user_save_error}")
+        else:
+            print(f"⏭️ Skipping save - N8N template already exists in user_workflows with source: {existing_workflow.get('source', 'unknown') if existing_workflow else 'unknown'}")
+            # If the existing workflow doesn't have a template_id but this import does, update it
+            if existing_workflow and not existing_workflow.get('template_id') and template_id:
+                try:
+                    db_manager.update_user_workflow_template_id(user_id, template_name, template_id)
+                    print(f"📝 Updated existing workflow '{template_name}' with template_id: {template_id}")
+                except Exception as update_error:
+                    print(f"⚠️ Warning: Failed to update workflow with template_id: {update_error}")
         
         return jsonify({
             'success': True,
@@ -555,32 +577,62 @@ def deploy_workflow_to_n8n():
         
         # Update database with N8N workflow ID based on workflow source
         if workflow_source == 'direct':
-            # For direct deployments, we must first save the workflow to get a record
-            print(f"✍️ Saving new record for direct deployment of '{workflow_name}'")
-            try:
-                # We need a stripped-down version of the workflow info to save
-                parsed_workflow = workflow_parser.parse_workflow_data(workflow_data)
-                credentials_required = [cred.service_name for cred in parsed_workflow.required_credentials]
-                
-                # Use custom description if provided, otherwise use parsed description
-                save_description = workflow_description or parsed_workflow.workflow_description
+            # Enhanced duplicate check - look for existing workflows by name, template_id, or content
+            existing_workflows = db_manager.get_user_uploaded_workflows(user_id, None)
+            existing_workflow = None
+            
+            # Check for duplicate by workflow name, template_id, or similar workflow data
+            for existing in existing_workflows:
+                if (existing.get('workflow_name') == workflow_name or 
+                    (template_id and existing.get('template_id') == template_id)):
+                    existing_workflow = existing
+                    print(f"🔍 Found existing workflow: '{workflow_name}' (ID: {existing.get('template_id')}) with source: {existing.get('source', 'unknown')}")
+                    break
+            
+            if existing_workflow:
+                # Update existing workflow with N8N ID instead of creating duplicate
+                print(f"📝 Updating existing workflow '{workflow_name}' with n8n_workflow_id: {n8n_workflow_id}")
+                try:
+                    db_manager.update_user_workflow_n8n_id(user_id, workflow_name, n8n_workflow_id)
+                    print(f"  ▶ Successfully updated existing workflow with n8n ID.")
+                    
+                    # Also update source to 'deployed' to reflect it's now deployed
+                    if existing_workflow.get('source') != 'deployed':
+                        try:
+                            db_manager.update_user_workflow_source(user_id, workflow_name, 'deployed')
+                            print(f"  ▶ Updated workflow source to 'deployed'")
+                        except Exception as source_update_error:
+                            print(f"⚠️ Warning: Failed to update workflow source: {source_update_error}")
+                            
+                except Exception as update_error:
+                    print(f"❌ Warning: Failed to update existing workflow: {update_error}")
+            else:
+                # For direct deployments, we must first save the workflow to get a record
+                print(f"✍️ Saving new record for direct deployment of '{workflow_name}'")
+                try:
+                    # We need a stripped-down version of the workflow info to save
+                    parsed_workflow = workflow_parser.parse_workflow_data(workflow_data)
+                    credentials_required = [cred.service_name for cred in parsed_workflow.required_credentials]
+                    
+                    # Use custom description if provided, otherwise use parsed description
+                    save_description = workflow_description or parsed_workflow.workflow_description
 
-                saved_workflow = db_manager.save_user_uploaded_workflow(
-                    user_id=user_id,
-                    workflow_name=workflow_name,
-                    workflow_json=workflow_data,
-                    workflow_description=save_description,  # Use custom or parsed description
-                    credentials_required=credentials_required,
-                    user_jwt=None,
-                    n8n_workflow_id=n8n_workflow_id  # Save it with the n8n_id
-                )
-                if not saved_workflow:
-                     raise Exception("Failed to save the new workflow record to the database.")
-                print(f"  ▶ Successfully saved direct deployment record for '{workflow_name}'.")
+                    saved_workflow = db_manager.save_user_uploaded_workflow(
+                        user_id=user_id,
+                        workflow_name=workflow_name,
+                        workflow_json=workflow_data,
+                        workflow_description=save_description,  # Use custom or parsed description
+                        credentials_required=credentials_required,
+                        user_jwt=None,
+                        n8n_workflow_id=n8n_workflow_id  # Save it with the n8n_id
+                    )
+                    if not saved_workflow:
+                         raise Exception("Failed to save the new workflow record to the database.")
+                    print(f"  ▶ Successfully saved direct deployment record for '{workflow_name}'.")
 
-            except Exception as save_error:
-                print(f"❌ Critical error: Failed to save direct deployment workflow: {save_error}")
-                return jsonify({'error': f'Failed to save workflow record before deployment: {save_error}'}), 500
+                except Exception as save_error:
+                    print(f"❌ Critical error: Failed to save direct deployment workflow: {save_error}")
+                    return jsonify({'error': f'Failed to save workflow record before deployment: {save_error}'}), 500
 
         elif template_id and workflow_source and workflow_source != 'direct':
             if workflow_source == 'user':
@@ -690,7 +742,6 @@ def save_user_uploaded_workflow():
         
         try:
             # Save the user-uploaded workflow directly to user_workflows table
-            print(f"DEBUG: user_id={user_id}, user_jwt exists: {hasattr(g, 'user_jwt') and None is not None}")
             workflow_saved = db_manager.save_user_uploaded_workflow(
                 user_id=user_id,
                 workflow_name=workflow_name,
@@ -710,47 +761,43 @@ def save_user_uploaded_workflow():
             n8n_workflow_id = None
             n8n_creation_success = False
             try:
-                # Get user's N8N instance configuration
-                user_profile = db_manager.get_user_profile(user_id)
-                if user_profile:
-                    n8n_instance_url = user_profile.get('n8n_instance_url')
-                    n8n_api_key = user_profile.get('n8n_api_key')
+                # Get N8N instance configuration from environment variables
+                n8n_instance_url = N8N_BASE_URL
+                n8n_api_key = N8N_API_KEY
+                
+                if n8n_instance_url and n8n_api_key and n8n_instance_url != 'https://your-n8n-instance.com' and n8n_api_key != 'your-n8n-api-key':
+                    print(f"🚀 Creating workflow '{workflow_name}' in n8n backend...")
                     
-                    if n8n_instance_url and n8n_api_key:
-                        print(f"🚀 Creating workflow '{workflow_name}' in n8n backend...")
+                    # Create workflow in N8N instance
+                    # Use the name from the workflow data if present, else fallback
+                    workflow_name_from_json = None
+                    if isinstance(workflow_json, dict):
+                        workflow_name_from_json = workflow_json.get('name')
+                    if isinstance(workflow_name_from_json, str) and workflow_name_from_json.strip():
+                        workflow_name = workflow_name_from_json.strip()
+                    elif not isinstance(workflow_name, str) or not workflow_name.strip():
+                        workflow_name = "Untitled Workflow"
+                    n8n_workflow_id = create_workflow_in_n8n_instance(
+                        n8n_instance_url, 
+                        n8n_api_key, 
+                        workflow_json, 
+                        workflow_name
+                    )
+                    
+                    if n8n_workflow_id:
+                        n8n_creation_success = True
+                        print(f"✅ Successfully created n8n workflow with ID: {n8n_workflow_id}")
                         
-                        # Create workflow in user's N8N instance
-                        # Use the name from the workflow data if present, else fallback
-                        workflow_name_from_json = None
-                        if isinstance(workflow_json, dict):
-                            workflow_name_from_json = workflow_json.get('name')
-                        if isinstance(workflow_name_from_json, str) and workflow_name_from_json.strip():
-                            workflow_name = workflow_name_from_json.strip()
-                        elif not isinstance(workflow_name, str) or not workflow_name.strip():
-                            workflow_name = "Untitled Workflow"
-                        n8n_workflow_id = create_workflow_in_n8n_instance(
-                            n8n_instance_url, 
-                            n8n_api_key, 
-                            workflow_json, 
-                            workflow_name
-                        )
-                        
-                        if n8n_workflow_id:
-                            n8n_creation_success = True
-                            print(f"✅ Successfully created n8n workflow with ID: {n8n_workflow_id}")
-                            
-                            # Update database with N8N workflow ID
-                            try:
-                                db_manager.update_user_workflow_n8n_id(user_id, workflow_name, n8n_workflow_id)
-                                print(f"✅ Updated database with n8n workflow ID: {n8n_workflow_id}")
-                            except Exception as update_error:
-                                print(f"⚠️  Warning: Failed to update database with n8n ID: {update_error}")
-                        else:
-                            print(f"❌ Failed to create workflow in n8n backend")
+                        # Update database with N8N workflow ID
+                        try:
+                            db_manager.update_user_workflow_n8n_id(user_id, workflow_name, n8n_workflow_id)
+                            print(f"✅ Updated database with n8n workflow ID: {n8n_workflow_id}")
+                        except Exception as update_error:
+                            print(f"⚠️  Warning: Failed to update database with n8n ID: {update_error}")
                     else:
-                        print(f"⚠️  User n8n configuration not found - skipping n8n creation")
+                        print(f"❌ Failed to create workflow in n8n backend")
                 else:
-                    print(f"⚠️  User profile not found - skipping n8n creation")
+                    print(f"⚠️  N8N configuration not found in environment - skipping n8n creation")
                     
             except Exception as n8n_error:
                 print(f"❌ Error creating workflow in n8n backend: {n8n_error}")
@@ -769,10 +816,7 @@ def save_user_uploaded_workflow():
             
             if n8n_workflow_id:
                 response_data['n8n_workflow_id'] = n8n_workflow_id
-                if user_profile:
-                    response_data['n8n_workflow_url'] = f"{user_profile.get('n8n_instance_url', '')}/workflow/{n8n_workflow_id}"
-                else:
-                    response_data['n8n_workflow_url'] = ''  # or some default
+                response_data['n8n_workflow_url'] = f"{n8n_instance_url}/workflow/{n8n_workflow_id}"
                 
             return jsonify(response_data)
             
@@ -812,26 +856,8 @@ def get_user_uploaded_workflows():
             'error': str(e)
         }), 500
 
-@app.route('/api/marketplace/workflows', methods=['GET'])
-def get_marketplace_workflows():
-    """
-    Get all N8N workflows available in the marketplace
-    """
-    try:
-        workflows = db_manager.get_marketplace_workflows()
-        
-        return jsonify({
-            'success': True,
-            'workflows': workflows,
-            'count': len(workflows)
-        })
-        
-    except Exception as e:
-        print(f"Error getting marketplace workflows: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+# NOTE: Marketplace workflows endpoint removed as n8n_workflows table is no longer used
+# All workflows are now stored in user_workflows table
 
 @app.route('/api/user/uploaded-workflows/<template_id>', methods=['DELETE'])
 def delete_user_uploaded_workflow(template_id):
@@ -1184,8 +1210,15 @@ def create_workflow_in_n8n_instance(n8n_url, api_key, workflow_data, workflow_na
         if response.status_code in [200, 201]:  # Accept both 200 and 201 as success
             workflow_response = response.json()
             n8n_workflow_id = workflow_response.get('id')
-            print(f"✅ Successfully created workflow with ID: {n8n_workflow_id}")
-            return n8n_workflow_id
+            
+            if n8n_workflow_id:
+                print(f"✅ Successfully created workflow with ID: {n8n_workflow_id}")
+                return n8n_workflow_id
+            else:
+                print(f"⚠️ N8N API returned 200 but no workflow ID found")
+                print(f"Response keys: {list(workflow_response.keys()) if isinstance(workflow_response, dict) else 'Not a dict'}")
+                print(f"Full response (first 200 chars): {str(workflow_response)[:200]}...")
+                return None
         else:
             print(f"❌ Failed to create workflow. Status: {response.status_code}")
             print(f"Response: {response.text}")
@@ -1264,5 +1297,9 @@ if __name__ == '__main__':
         print(f"Warning: Database initialization failed: {e}")
         print("Application will run but database features may not work")
     
-    port = int(os.getenv('PORT', 5000))
-    app.run(debug=False, host='0.0.0.0', port=port) 
+    # Get host and port from environment
+    host = os.getenv('HOST', os.getenv('FLASK_HOST', '0.0.0.0'))
+    port = int(os.getenv('PORT', os.getenv('FLASK_PORT', 5000)))
+    
+    print(f"Starting Flask app on http://{host}:{port}")
+    app.run(debug=False, host=host, port=port) 

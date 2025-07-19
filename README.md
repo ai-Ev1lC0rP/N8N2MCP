@@ -72,7 +72,10 @@ graph TB
 - **Python 3.11+**
 - **N8N Instance** (cloud.n8n.io or self-hosted)
 - **Supabase Account** (for data storage)
+- **Playwright** (required for N8N authentication)
 - **Docker** (optional, for containerized deployment)
+
+> ⚠️ **Important**: Playwright installation is **required** for N8N workflow execution. The system will use dummy credentials if Playwright is not properly installed, limiting functionality.
 
 ### Quick Start
 
@@ -82,95 +85,91 @@ graph TB
    cd N8N-Agent-Marketplace
    ```
 
-2. **Set up Agent Marketplace**
+2. **Install dependencies**
    ```bash
-   cd agent_marketplace
    pip install -r requirements.txt
-   python app.py
-   ```
-   Access at: http://localhost:5000
+    ```
 
-3. **Set up MCP Router** (in separate terminal)
+3. **Install Playwright browsers** (Required)
    ```bash
-   cd mcp_router
-   pip install -e .
-   playwright install  # For N8N authentication
-   python mcp_router.py
+   playwright install
+   # This downloads the necessary browser binaries for N8N authentication
    ```
-   Service available at: http://localhost:6545
 
-### Environment Configuration
-
-Create `.env` files in both directories:
-
-#### agent_marketplace/.env
-```env
-# Flask Configuration
-FLASK_SECRET_KEY=your-secret-key
-
-# Supabase Database
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-anon-key
-
-# N8N Integration
-N8N_BASE_URL=https://your-n8n-instance.com
-X_N8N_API_KEY=your-n8n-api-key
-
-# MCP Router (optional)
-N8N_BUILDER_URL=http://localhost:6545
-```
-
-#### mcp_router/.env
-```env
-# N8N Configuration
-N8N_INSTANCE_URL=https://your-n8n-instance.com
-N8N_API_KEY=your-n8n-api-key
-N8N_USERNAME=your-n8n-username
-N8N_PASSWORD=your-n8n-password
-
+4. **Configure environment**
+   ```bash
+   # Copy and edit the .env file (see Environment Configuration section)
+   cp .env.example .env
+   # Edit .env with your actual configuration values
+   ```
 # Supabase Configuration
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-supabase-service-key
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key
+
+# N8N Configuration
+X_N8N_API_KEY=your_n8n_api_key
+N8N_BASE_URL=https://your-n8n-instance.com
+N8N_USERNAME=your_n8n_username
+N8N_PASSWORD=your_n8n_password
+
+# MCP Router Configuration
+N8N_BUILDER_URL=http://localhost:6545
 
 # Server Configuration
-PORT=6545
-HOST=0.0.0.0
+FLASK_HOST=0.0.0.0
+FLASK_PORT=5000
+MCP_HOST=0.0.0.0
+MCP_PORT=6545
+
+# Optional: Authentication credentials (auto-populated)
+N8N_AUTH=
+N8N_BROWSER_ID=   
 ```
+
+5. **Start both servers**
+   ```bash
+   python main.py
+   ```
+   This starts:
+   - Flask App (Agent Marketplace) at: http://localhost:5000
+   - MCP Router at: http://localhost:6545
+
+6. **Access to UI**
+   Front end : http://localhost:5000
+   
+
+**Configuration Notes:**
+- **SUPABASE_URL**: Your Supabase project URL
+- **SUPABASE_KEY**: Anon key for client-side operations
+- **SUPABASE_SERVICE_KEY**: Service role key for admin operations
+- **N8N_BASE_URL**: Your N8N instance URL (must include https://)
+- **N8N_BUILDER_URL**: Must include http:// protocol
 
 ## 🔧 Usage
 
 ### Creating MCP Servers from N8N Workflows
 
-1. **Upload Workflow**: Use the Agent Marketplace to upload your N8N workflow JSON
-2. **Configure Credentials**: Fill in required API keys and service credentials
-3. **Deploy to N8N**: One-click deployment creates the workflow in your N8N instance
-4. **Generate MCP Server**: Use the MCP Router to create a callable MCP server
-5. **Integrate with AI**: Add the MCP server to your AI assistant configuration
+#### Method 1: Import N8N Templates
+1. **Browse Templates**: Visit the marketplace at http://localhost:5000
+2. **Import Template**: Enter an N8N template ID from n8n.io
+3. **Configure Credentials**: Fill in required API keys and service credentials
+4. **Deploy Workflow**: Click deploy to create the workflow in your N8N instance
+5. **MCP Server Created**: Automatically generates an MCP server endpoint
 
-### Example: Creating a Data Processing Tool
+#### Method 2: Upload Custom Workflows  
+1. **Upload JSON**: Upload your N8N workflow JSON file
+2. **Review Analysis**: Check detected nodes and required credentials
+3. **Configure & Deploy**: Fill credentials and deploy to N8N
+4. **Access MCP Server**: Use the generated MCP endpoint in AI tools
 
+#### Using MCP Servers
 ```bash
-# 1. Register workflow with MCP Router
-curl -X POST "http://localhost:6545/n8n/build" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "workflow_id": "data_processor_123",
-    "user_apikey": "your_unique_key"
-  }'
+# Example MCP server URL format:
+http://localhost:6545/mcp/{workflow_id}/{api_key}
 
-# 2. Configure Claude Desktop to use the MCP server
-# Add to claude_desktop_config.json:
-{
-  "mcpServers": {
-    "data_processor": {
-      "command": "npx",
-      "args": [
-        "@modelcontextprotocol/server-fetch",
-        "http://localhost:6545/mcp/data_processor_123/your_unique_key"
-      ]
-    }
-  }
-}
+# Test MCP server:
+curl http://localhost:6545/list  # List all registered MCP servers
 ```
 
 ## 🎨 Use Cases
@@ -201,85 +200,180 @@ curl -X POST "http://localhost:6545/n8n/build" \
 
 ```
 N8N-Agent-Marketplace/
-├── agent_marketplace/              # Flask web application
-│   ├── app.py                     # Main Flask app with API endpoints
-│   ├── database.py                # Supabase integration
-│   ├── n8n_workflow_parser.py     # Workflow analysis engine
-│   ├── requirements.txt           # Python dependencies
-│   ├── templates/                 # HTML templates
-│   └── static/                    # CSS/JS/assets
-├── mcp_router/                    # FastAPI MCP service
-│   ├── mcp_router.py              # Main FastAPI application
+├── main.py                        # Unified server startup script
+├── requirements.txt               # Consolidated Python dependencies
+├── .env                          # Environment configuration (shared)
+├── setup_database.py             # Database initialization
+│
+├── agent_marketplace/             # Flask web application
+│   ├── app.py                    # Main Flask app with API endpoints
+│   ├── database.py               # Supabase integration & data models
+│   ├── n8n_workflow_parser.py    # Workflow analysis engine
+│   ├── setup_supabase.py         # Database setup utilities
+│   ├── templates/                # HTML templates
+│   │   ├── workflows.html        # Main marketplace interface
+│   │   └── static/               # CSS, JS assets
+│   └── __init__.py               # Python package marker
+│
+├── mcp_router/                   # FastAPI MCP service
+│   ├── mcp_router.py             # Main FastAPI application
 │   ├── n8n_credential_extractor.py # N8N authentication
-│   ├── secret_manager.py          # Credential management
-│   ├── n8n_mcp.py                # MCP server template
-│   └── pyproject.toml             # Python dependencies
-└── README.md                      # This documentation
-```
-
-### Running Tests
-
-```bash
-# Agent Marketplace
-cd agent_marketplace
-python -m pytest tests/
-
-# MCP Router
-cd mcp_router
-python -m pytest tests/
-python test_mcp_router.py
-```
-
-### Docker Deployment
-
-```bash
-# Build and run Agent Marketplace
-cd agent_marketplace
-docker build -t agent-marketplace .
-docker run -p 5000:5000 --env-file .env agent-marketplace
-
-# Build and run MCP Router
-cd mcp_router
-docker build -t mcp-router .
-docker run -p 6545:6545 --env-file .env mcp-router
-```
-
-## 🚀 Production Deployment
-
-### Using Docker Compose
-
-```yaml
-version: '3.8'
-services:
-  agent-marketplace:
-    build: ./agent_marketplace
-    ports:
-      - "5000:5000"
-    environment:
-      - FLASK_ENV=production
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-      - N8N_BASE_URL=${N8N_BASE_URL}
-      - X_N8N_API_KEY=${X_N8N_API_KEY}
-    restart: unless-stopped
-
-  mcp-router:
-    build: ./mcp_router
-    ports:
-      - "6545:6545"
-    environment:
-      - N8N_INSTANCE_URL=${N8N_INSTANCE_URL}
-      - N8N_API_KEY=${N8N_API_KEY}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-    restart: unless-stopped
+│   ├── credential_helper.py       # Credential management utilities
+│   └── __init__.py               # Python package marker
+│
+└── README.md                     # This documentation
 ```
 
 ### Database Setup
 
+The system uses **2 main tables** in Supabase:
+
+#### Setup
 1. **Create Supabase Project**: Set up a new project at [supabase.com](https://supabase.com)
-2. **Run Migrations**: Execute the SQL scripts in `agent_marketplace/`
-3. **Configure RLS**: Set up Row Level Security policies for user data isolation
+2. **Run SQL in Supabase SQL Editor**:
+
+```sql
+-- Main workflow storage table
+CREATE TABLE IF NOT EXISTS public.user_workflows (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    template_id TEXT NOT NULL,
+    template_url TEXT NOT NULL,
+    workflow_name TEXT NOT NULL,
+    workflow_json JSONB NOT NULL,
+    workflow_description TEXT,
+    n8n_workflow_id TEXT,
+    source TEXT DEFAULT 'user_upload',
+    credentials_required JSONB DEFAULT '[]'::jsonb,
+    mcp_link TEXT,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- MCP server configurations
+CREATE TABLE IF NOT EXISTS public.mcp_configs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    user_apikey TEXT NOT NULL,
+    code TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(workflow_id, user_apikey)
+);
+
+-- Enable Row Level Security (recommended)
+ALTER TABLE user_workflows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mcp_configs ENABLE ROW LEVEL SECURITY;
+```
+
+## 🚀 Running the System
+
+### Unified Startup (Recommended)
+```bash
+python main.py
+```
+This automatically starts both services with:
+- ✅ Environment validation
+- ✅ Database setup verification  
+- ✅ Graceful shutdown handling
+- ✅ Centralized logging
+
+### Individual Services
+
+#### Agent Marketplace (Port 5000)
+```bash
+cd agent_marketplace
+python app.py
+```
+
+#### MCP Router (Port 6545)  
+```bash
+cd mcp_router
+python mcp_router.py
+```
+
+### Verification
+```bash
+# Test Agent Marketplace
+curl http://localhost:5000/api/health
+
+# Test MCP Router
+curl http://localhost:6545/list
+
+# View all endpoints
+curl http://localhost:5000/api/health | grep endpoints
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Port Already in Use
+```bash
+# Kill processes on ports 5000 and 6545
+fuser -k 5000/tcp 6545/tcp
+# Or restart with main.py which handles this automatically
+python main.py
+```
+
+#### Database Connection Issues
+```bash
+# Verify Supabase configuration
+python -c "from agent_marketplace.database import db_manager; print('✅ Database OK' if db_manager.supabase else '❌ Database connection failed')"
+
+# Reset database tables
+python agent_marketplace/setup_supabase.py
+```
+
+#### MCP Router Not Responding
+```bash
+# Check if MCP Router is running
+curl http://localhost:6545/list
+
+# View MCP Router logs
+# Logs appear in terminal where main.py was started
+```
+
+#### N8N Workflow Creation Fails
+- Verify `N8N_BASE_URL` includes `https://`
+- Check `X_N8N_API_KEY` is valid and has workflow creation permissions
+- Ensure N8N instance is accessible from your server
+
+#### Missing Dependencies
+```bash
+# Install missing packages
+pip install playwright
+playwright install  # For N8N authentication (required)
+
+# Or install all dependencies
+pip install -r requirements.txt
+```
+
+#### Playwright Browser Issues
+```bash
+# If playwright browsers fail to download
+playwright install --force
+
+# For headless environments (servers)
+playwright install chromium
+
+# Check if playwright is working
+python -c "from playwright.async_api import async_playwright; print('✅ Playwright OK')"
+```
+
+### Development Tips
+```bash
+# Enable debug mode for Flask
+export FLASK_DEBUG=1
+
+# View detailed MCP Router logs
+cd mcp_router && python mcp_router.py --log-level debug
+
+# Test individual components
+python -m agent_marketplace.n8n_workflow_parser  # Test parser
+python -m mcp_router.mcp_router                  # Test MCP Router
+```
 
 ## 🔐 Security Best Practices
 
@@ -288,20 +382,6 @@ services:
 - **Network Security**: Use HTTPS in production with proper SSL certificates
 - **Access Control**: Implement proper authentication and authorization
 - **Data Isolation**: Ensure proper user data segregation with RLS policies
-
-## 📚 API Documentation
-
-### Agent Marketplace API
-- `POST /api/parse-workflow` - Analyze N8N workflow
-- `POST /api/deploy-workflow-to-n8n` - Deploy to N8N instance
-- `GET /api/marketplace/workflows` - Browse available workflows
-- `POST /api/auth/login` - User authentication
-
-### MCP Router API
-- `POST /n8n/build` - Register workflow as MCP server
-- `GET /list` - List registered MCP servers
-- `POST /remove/{workflow_id}/{user_key}` - Remove MCP registration
-- `mcp://{host}:{port}/mcp/{workflow_id}/{user_key}` - MCP server endpoint
 
 ## 🤝 Contributing
 
@@ -315,11 +395,35 @@ services:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 📋 Quick Reference
+
+### API Endpoints
+
+#### Agent Marketplace (Port 5000)
+- `GET /` - Main marketplace interface
+- `GET /api/health` - Health check and available endpoints
+- `POST /api/import-n8n-template-enhanced` - Import N8N template
+- `POST /api/deploy-workflow-to-n8n` - Deploy workflow with credentials
+- `GET /api/user/uploaded-workflows` - List user workflows
+- `GET /api/user/mcp-servers` - List active MCP servers
+
+#### MCP Router (Port 6545)
+- `GET /list` - List all registered MCP servers
+- `POST /n8n/build` - Create MCP server from N8N workflow
+- `GET /n8n/credentials/status` - Check N8N credential status
+- `/mcp/{workflow_id}/{api_key}` - MCP server endpoint
+
+### Key File Locations
+- **Configuration**: `.env` (root directory)
+- **Main Startup**: `main.py`
+- **Flask App**: `agent_marketplace/app.py`
+- **MCP Router**: `mcp_router/mcp_router.py`
+
 ## 🆘 Support
 
 - **Issues**: [GitHub Issues](https://github.com/Super-Chain/N8N-Agent-Marketplace/issues)
-- **Documentation**: Check component-specific READMEs in `/agent_marketplace/` and `/mcp_router/`
-- **Community**: Join our community discussions
+- **Documentation**: Check this README and inline code documentation
+- **Community**: Join our community discussions for help and feature requests
 
 ## 🙏 Acknowledgments
 

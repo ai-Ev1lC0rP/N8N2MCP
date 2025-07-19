@@ -2,10 +2,11 @@ import httpx
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables from parent directory
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
-N8N_INSTANCE_URL = os.getenv('N8N_INSTANCE_URL')
-N8N_API_KEY = os.getenv('N8N_API_KEY')
+N8N_INSTANCE_URL = os.getenv('N8N_BASE_URL')
+N8N_API_KEY = os.getenv('X_N8N_API_KEY')
 
 if not N8N_INSTANCE_URL or not N8N_API_KEY:
     raise ValueError("N8N_INSTANCE_URL and N8N_API_KEY must be set in environment variables")

@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 from datetime import datetime
 
-load_dotenv()
+# Load environment variables from parent directory
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
 class N8NCredentialExtractor:
     def __init__(self, username: str, password: str, instance_url: str):

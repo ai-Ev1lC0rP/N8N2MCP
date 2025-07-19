@@ -2,12 +2,11 @@ import os
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
-from contextlib import contextmanager
+from typing import Dict, List, Optional
 from dotenv import load_dotenv  # type: ignore
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from parent directory
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
 try:
     from supabase import create_client, Client  # type: ignore
@@ -41,11 +40,7 @@ class SupabaseManager:
     - status: Workflow status (active, pending, etc.)
     - source: Source type ('n8n_marketplace' or 'user_upload')
     
-    OPTIONAL FIELDS (may not exist in all deployments):
-    - credentials_required: List of required credential types (JSON array)
-    
     DIFFERENCES IN USAGE:
-    - n8n_workflows: For workflows imported from n8n.io via URL
     - user_workflows: For workflows uploaded directly by users via file upload
     """
     
@@ -95,170 +90,6 @@ class SupabaseManager:
             print(f"Error initializing database: {e}")
             return False
     
-    # User Management
-    def get_user_profile(self, user_id: str) -> Optional[Dict]:
-        """Get user profile information"""
-        try:
-            # Always try to get from Supabase first
-            if not self.supabase:
-                return None
-                
-            result = self.supabase.table('user_profiles').select('*').eq('user_id', user_id).execute()  # type: ignore
-            if result.data:
-                return result.data[0]
-            
-            # Fallback to mock profile if in development mode
-            if self.development_mode:
-                print(f"Using mock user profile for development user: {user_id}")
-                return {
-                    'user_id': user_id,
-                    'email': 'dev@example.com',
-                    'name': 'Development User',
-                    'avatar_url': 'https://ui-avatars.com/api/?name=Dev&background=667eea&color=fff'
-                }
-            
-            return None
-        except Exception as e:
-            print(f"Error getting user profile: {e}")
-            return None
-    
-    def create_user_profile(self, user_id: str, email: str, name: str, avatar_url: Optional[str] = None) -> bool:
-        """Create or update user profile"""
-        try:
-            # Always try to save to Supabase first
-            if SUPABASE_AVAILABLE and self.supabase:
-                # First check if user profile already exists
-                existing = self.supabase.table('user_profiles').select('user_id').eq('user_id', user_id).execute()  # type: ignore
-                
-                if existing.data:
-                    # User already exists, update instead
-                    user_data = {
-                        'email': email,
-                        'name': name,
-                        'avatar_url': avatar_url,
-                        'updated_at': datetime.now().isoformat()
-                    }
-                    result = self.supabase.table('user_profiles').update(user_data).eq('user_id', user_id).execute()  # type: ignore
-                    print(f"✅ Updated existing user profile for {email} in Supabase")
-                else:
-                    # Create new user profile
-                    user_data = {
-                        'user_id': user_id,
-                        'email': email,
-                        'name': name,
-                        'avatar_url': avatar_url,
-                        'created_at': datetime.now().isoformat(),
-                        'updated_at': datetime.now().isoformat()
-                    }
-                    result = self.supabase.table('user_profiles').insert(user_data).execute()  # type: ignore
-                    print(f"✅ Created new user profile for {email} in Supabase")
-                
-                return True
-            else:
-                # Fallback for development mode
-                print(f"Mock creating user profile for {name} (Supabase not available)")
-                return True
-        except Exception as e:
-            print(f"Error managing user profile: {e}")
-            # Don't fail login just because profile creation failed
-            return True
-    
-    # Credential Management
-    def save_user_credential(self, user_id: str, service_name: str, credential_type: str, 
-                           encrypted_credentials: Dict, metadata: Optional[Dict] = None, user_jwt: Optional[str] = None) -> bool:
-        """Save user credentials to database"""
-        try:
-            if not self.supabase:
-                print("ERROR: Supabase not available, cannot save user credentials")
-                return False
-            
-            print(f"Saving credential for {service_name} to Supabase database")
-            
-            # Use JWT authentication if provided for RLS compliance
-            if user_jwt and SUPABASE_AVAILABLE:
-                print("DEBUG: Using user JWT for credential save authentication")
-                supabase_client: Client = create_client(self.supabase_url, self.supabase_key)  # type: ignore
-                supabase_client.auth.session = type('Session', (), {  # type: ignore
-                    'access_token': user_jwt,
-                    'refresh_token': '',
-                    'user': {'id': user_id}
-                })()
-            else:
-                print("DEBUG: No user JWT, using service client")
-                supabase_client = self.supabase
-            
-            credential_data = {
-                'user_id': user_id,
-                'service_name': service_name,
-                'credential_type': credential_type,
-                'encrypted_credentials': json.dumps(encrypted_credentials),
-                'metadata': json.dumps(metadata or {}),
-                'created_at': datetime.now().isoformat(),
-                'updated_at': datetime.now().isoformat()
-            }
-            
-            # Check if credential exists and update, otherwise insert
-            existing = supabase_client.table('user_credentials').select('id').eq('user_id', user_id).eq('service_name', service_name).execute()  # type: ignore
-            
-            if existing.data:
-                credential_data['updated_at'] = datetime.now().isoformat()
-                result = supabase_client.table('user_credentials').update(credential_data).eq('user_id', user_id).eq('service_name', service_name).execute()  # type: ignore
-            else:
-                result = supabase_client.table('user_credentials').insert(credential_data).execute()  # type: ignore
-            
-            return True
-        except Exception as e:
-            print(f"Error saving user credential: {e}")
-            return False
-    
-    def get_user_credentials(self, user_id: str, service_name: Optional[str] = None, user_jwt: Optional[str] = None) -> List[Dict]:
-        """Get user credentials, optionally filtered by service"""
-        try:
-            if not self.supabase:
-                print("ERROR: Supabase not available, cannot get user credentials")
-                return []
-                
-            print(f"Getting credentials for {service_name or 'all services'} from Supabase database")
-            
-            # Use JWT authentication if provided for RLS compliance
-            if user_jwt and SUPABASE_AVAILABLE:
-                print("DEBUG: Using user JWT for credential retrieval authentication")
-                query_client: Client = create_client(self.supabase_url, self.supabase_key)  # type: ignore
-                query_client.auth.session = type('Session', (), {  # type: ignore
-                    'access_token': user_jwt,
-                    'refresh_token': '',
-                    'user': {'id': user_id}
-                })()
-                query = query_client.table('user_credentials').select('*').eq('user_id', user_id)  # type: ignore
-            else:
-                print("DEBUG: No user JWT, using service client")
-                query = self.supabase.table('user_credentials').select('*').eq('user_id', user_id)  # type: ignore
-            
-            if service_name:
-                query = query.eq('service_name', service_name)
-            
-            result = query.execute()  # type: ignore
-            
-            # Decrypt credentials before returning
-            credentials = []
-            for cred in result.data:
-                cred['encrypted_credentials'] = json.loads(cred['encrypted_credentials'])
-                cred['metadata'] = json.loads(cred.get('metadata', '{}'))
-                credentials.append(cred)
-            
-            return credentials
-        except Exception as e:
-            print(f"Error getting user credentials: {e}")
-            return []
-    
-    def delete_user_credential(self, user_id: str, service_name: str) -> bool:
-        """Delete a user credential"""
-        try:
-            result = self.supabase.table('user_credentials').delete().eq('user_id', user_id).eq('service_name', service_name).execute()  # type: ignore
-            return True
-        except Exception as e:
-            print(f"Error deleting user credential: {e}")
-            return False
     
     # N8N Workflow Management
     def check_workflow_exists(self, template_url: str, template_id: Optional[str] = None) -> Optional[Dict]:
@@ -387,14 +218,10 @@ class SupabaseManager:
                 print("Supabase not available")
                 return []
                 
-            result = self.supabase.table('user_workflows').select(
-                '*, n8n_workflows(*)'
-            ).eq('user_id', user_id).execute()  # type: ignore
+            result = self.supabase.table('user_workflows').select('*').eq('user_id', user_id).execute()  # type: ignore
             
             workflows = []
             for workflow in result.data:
-                workflow['n8n_workflows']['workflow_json'] = json.loads(workflow['n8n_workflows']['workflow_json'])
-                workflow['n8n_workflows']['credentials_required'] = json.loads(workflow['n8n_workflows']['credentials_required'])
                 workflows.append(workflow)
             
             return workflows
@@ -425,43 +252,6 @@ class SupabaseManager:
             print(f"Error saving user workflow: {e}")
             return False
 
-    def get_marketplace_workflows(self) -> List[Dict]:
-        """Get all workflows available in the marketplace"""
-        try:
-            if not self.supabase:
-                print("ERROR: Supabase not available, cannot load marketplace workflows")
-                return []
-            
-            print("Loading marketplace workflows from Supabase database")
-                
-            # Production mode - query Supabase
-            result = self.supabase.table('user_workflows').select('*').execute()  # type: ignore
-            
-            workflows = []
-            for workflow in result.data:
-                workflow_data = {
-                    'id': f"n8n-{workflow['template_id']}",
-                    'name': workflow['workflow_name'],
-                    'description': workflow.get('workflow_description') or f"N8N workflow template (Template ID: {workflow['template_id']})",
-                    'category': 'Workflow',
-                    'icon': '🔧',
-                    'trending': False,
-                    'tools': ['n8n_workflow'],
-                    'template_id': workflow['template_id'],
-                    'template_url': workflow['template_url'],
-                    'workflow_json': workflow['workflow_json'],  # Include the actual workflow JSON
-                    'node_count': len(workflow['workflow_json'].get('nodes', [])),
-                    'credentials_required': json.loads(workflow.get('credentials_required', '[]')),
-                    'created_at': workflow['created_at'],
-                    'source': 'n8n_database'
-                }
-                workflows.append(workflow_data)
-            
-            return workflows
-        except Exception as e:
-            print(f"Error getting marketplace workflows: {e}")
-            return []
-    
     # N8N API Integration
     def create_n8n_workflow(self, workflow_json: Dict, workflow_name: str) -> Optional[str]:
         """Create workflow in N8N instance via API"""
@@ -614,114 +404,6 @@ class SupabaseManager:
             print(f"Error saving user-uploaded workflow: {e}")
             return False
 
-    def _save_workflow_to_local_file(self, user_id: str, workflow_name: str, workflow_json: Dict, workflow_description: Optional[str] = None, credentials_required: Optional[List[str]] = None) -> bool:
-        """Save workflow to local file for development mode"""
-        try:
-            file_path = 'user_uploaded_workflows.json'
-            
-            # Load existing workflows
-            workflows = []
-            if os.path.exists(file_path):
-                with open(file_path, 'r') as f:
-                    workflows = json.load(f)
-            
-            # Generate unique template_id
-            template_id = f"user-{user_id}-{str(uuid.uuid4())[:8]}"
-            
-            # Create workflow data
-            workflow_data = {
-                'user_id': user_id,
-                'template_id': template_id,
-                'template_url': f"user-upload://{template_id}",
-                'workflow_name': workflow_name,
-                'workflow_description': workflow_description or f"User-uploaded workflow: {workflow_name}",
-                'workflow_json': workflow_json,  # Keep as dict in local storage
-                'created_at': datetime.now().isoformat(),
-                'updated_at': datetime.now().isoformat(),
-                'status': 'active',
-                'source': 'user_upload',
-                'credentials_required': credentials_required or []
-            }
-            
-            workflows.append(workflow_data)
-            
-            # Save back to file
-            with open(file_path, 'w') as f:
-                json.dump(workflows, f, indent=2)
-            
-            print(f"✅ Saved workflow '{workflow_name}' to local file: {file_path}")
-            return True
-            
-        except Exception as e:
-            print(f"Error saving workflow to local file: {e}")
-            return False
-
-    def _load_workflows_from_local_file(self, user_id: str) -> List[Dict]:
-        """Load workflows from local file for development mode"""
-        try:
-            file_path = 'user_uploaded_workflows.json'
-            if not os.path.exists(file_path):
-                return []
-            
-            with open(file_path, 'r') as f:
-                all_workflows = json.load(f)
-            
-            # Filter workflows for the specific user and ensure JSON parsing
-            user_workflows = []
-            for w in all_workflows:
-                if w.get('user_id') == user_id and w.get('source') == 'user_upload':
-                    workflow_data = w.copy()
-                    
-                    print(f"\n🔍 DEBUG: Processing workflow '{workflow_data.get('workflow_name')}'")
-                    print(f"Raw workflow_json type: {type(workflow_data.get('workflow_json'))}")
-                    
-                    # Ensure workflow_json is properly parsed (handle both string and dict formats)
-                    workflow_json = workflow_data.get('workflow_json')
-                    
-                    if isinstance(workflow_json, str):
-                        print(f"📝 workflow_json is STRING, length: {len(workflow_json)}")
-                        print(f"First 200 chars: {workflow_json[:200]}...")
-                        try:
-                            parsed_json = json.loads(workflow_json)
-                            workflow_data['workflow_json'] = parsed_json
-                            print(f"✅ Successfully parsed workflow_json from string")
-                            print(f"Parsed JSON has {len(parsed_json.get('nodes', []))} nodes")
-                        except json.JSONDecodeError as e:
-                            print(f"❌ Failed to parse workflow_json: {e}")
-                            print(f"Raw JSON that failed: {workflow_json}")
-                            continue
-                    elif isinstance(workflow_json, dict):
-                        print(f"📦 workflow_json is already DICT with {len(workflow_json.get('nodes', []))} nodes")
-                    else:
-                        print(f"⚠️ Invalid workflow_json format: {type(workflow_json)}")
-                        print(f"Value: {workflow_json}")
-                        continue
-                    
-                    # Ensure credentials_required is properly parsed
-                    credentials_required = workflow_data.get('credentials_required', [])
-                    print(f"Credentials required type: {type(credentials_required)}, value: {credentials_required}")
-                    
-                    if isinstance(credentials_required, str):
-                        try:
-                            workflow_data['credentials_required'] = json.loads(credentials_required)
-                            print(f"✅ Parsed credentials_required from string: {workflow_data['credentials_required']}")
-                        except json.JSONDecodeError:
-                            print(f"❌ Failed to parse credentials_required, setting to empty list")
-                            workflow_data['credentials_required'] = []
-                    elif not isinstance(credentials_required, list):
-                        print(f"⚠️ credentials_required not a list, converting to empty list")
-                        workflow_data['credentials_required'] = []
-                    
-                    print(f"✅ Final workflow data: name='{workflow_data.get('workflow_name')}', credentials={workflow_data.get('credentials_required')}")
-                    user_workflows.append(workflow_data)
-            
-            print(f"✅ Loaded {len(user_workflows)} workflows from local file for user {user_id}")
-            return user_workflows
-            
-        except Exception as e:
-            print(f"Error loading workflows from local file: {e}")
-            return []
-
     def get_user_uploaded_workflows(self, user_id: str, user_jwt: Optional[str] = None) -> List[Dict]:
         """Get workflows uploaded directly by a user"""
         try:
@@ -742,11 +424,13 @@ class SupabaseManager:
             
             workflows = []
             for workflow in result.data:
-                # Only include user-uploaded workflows (source is 'user_upload' or template_id starts with 'user-')
+                # Include ALL workflows for this user regardless of source
+                # This function is used to get user's complete workflow list
                 source = workflow.get('source', '')
                 template_id = str(workflow.get('template_id', ''))
                 
-                if source == 'user_upload' or template_id.startswith('user-'):
+                # Include all workflows (user_upload, n8n_template, etc.)
+                if True:  # Process all workflows
                     workflow_data = workflow.copy()
                     # workflow_json is already a dict from JSONB, no need to parse
                     
@@ -878,34 +562,55 @@ class SupabaseManager:
         except Exception as e:
             print(f"Error updating user workflow MCP link: {e}")
             return False
-        
-    def save_mcp_server_path(self, user_id: str, n8n_workflow_id: str, mcp_server_path: str, 
-                           mcp_build_success: bool = False) -> bool:
-        """Save MCP server path information for a deployed workflow"""
+
+    def update_user_workflow_template_id(self, user_id: str, workflow_name: str, template_id: str) -> bool:
+        """Update user workflow with template_id"""
         try:
-            # Always save to Supabase database
             if not self.supabase:
-                print("ERROR: Supabase not available, cannot save MCP server path")
+                print("ERROR: Supabase not available, cannot update user workflow template_id")
                 return False
                 
-            print(f"Saving MCP server path for workflow {n8n_workflow_id} to Supabase database")
+            print(f"Updating user workflow template_id: user={user_id}, workflow='{workflow_name}' -> {template_id}")
                 
-            # Update the corresponding workflow deployment record with MCP server information
-            mcp_data = {
-                'mcp_link': mcp_server_path,
-            }
-            
-            result = self.supabase.table('user_workflows').update(mcp_data).eq('user_id', user_id).eq('n8n_workflow_id', n8n_workflow_id).execute()  # type: ignore
+            result = self.supabase.table('user_workflows').update({
+                'template_id': template_id,
+                'updated_at': datetime.now().isoformat()
+            }).eq('user_id', user_id).eq('workflow_name', workflow_name).execute()  # type: ignore
             
             if result.data:
-                print(f"✅ Successfully saved MCP server path: {mcp_server_path}")
+                print(f"✅ Successfully updated user workflow with template_id: {template_id}")
                 return True
             else:
-                print(f"⚠️ No deployment record found to update for user {user_id}, workflow {n8n_workflow_id}")
+                print(f"⚠️  No user workflow found to update for user {user_id}, workflow '{workflow_name}'")
                 return False
             
         except Exception as e:
-            print(f"Error saving MCP server path: {e}")
+            print(f"Error updating user workflow template_id: {e}")
+            return False
+
+    def update_user_workflow_source(self, user_id: str, workflow_name: str, source: str) -> bool:
+        """Update user workflow source"""
+        try:
+            if not self.supabase:
+                print("ERROR: Supabase not available, cannot update user workflow source")
+                return False
+                
+            print(f"Updating user workflow source: user={user_id}, workflow='{workflow_name}' -> {source}")
+                
+            result = self.supabase.table('user_workflows').update({
+                'source': source,
+                'updated_at': datetime.now().isoformat()
+            }).eq('user_id', user_id).eq('workflow_name', workflow_name).execute()  # type: ignore
+            
+            if result.data:
+                print(f"✅ Successfully updated user workflow source: {source}")
+                return True
+            else:
+                print(f"⚠️  No user workflow found to update for user {user_id}, workflow '{workflow_name}'")
+                return False
+            
+        except Exception as e:
+            print(f"Error updating user workflow source: {e}")
             return False
 
     def get_user_mcp_servers(self, user_id: str) -> List[Dict]:

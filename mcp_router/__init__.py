@@ -1,0 +1,1 @@
+# This file makes mcp_router a Python package
