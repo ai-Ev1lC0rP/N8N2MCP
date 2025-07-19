@@ -1,13 +1,21 @@
 # N8N Agent Marketplace
-
-**Transform your N8N workflows into AI-powered tools instantly**
+#### Transform your N8N workflows into MCP servers instantly 
+#### [🎯 Try the Live Demo](https://p2rdr5jbej.us-east-1.awsapprunner.com/)
 
 A comprehensive platform that converts N8N workflows into Model Context Protocol (MCP) servers, enabling seamless integration with AI assistants like Claude, Cursor, and other MCP-compatible platforms. Build powerful automation tools using N8N's visual workflow editor and deploy them as callable AI functions.
 
-## 🚀 Demo 
-[Live Demo](https://p2rdr5jbej.us-east-1.awsapprunner.com/)
-
 <img width="1800" height="836" alt="Screenshot 2025-07-17 at 11 33 45 AM" src="https://github.com/user-attachments/assets/f8f49abb-00ce-4221-8bcf-5d27a7078a9a" />
+
+
+## ✨ How to use 
+
+1. Copy the N8N template link/JSON from any workflow
+   
+2. Map your credentials through our intuitive interface
+   
+3. Deploy with one click!
+
+**Your N8N workflow gets deployed and creates a local hosted MCP server. Just paste the server URL into Claude, Cursor, Super Chain, or any MCP-compatible platform!**
 
 ## 🎯 Key Features
 
@@ -23,18 +31,6 @@ Convert your N8N workflows into MCP servers that AI assistants can use as custom
 - Upload and manage your custom N8N workflows
 - Real-time credential configuration and testing
 - One-click deployment to your N8N instance
-
-### 🔐 **Enterprise-Grade Security**
-- Zero server-side credential storage
-- Secure credential transmission during deployment
-- Isolated MCP instances per user/workflow
-- Row-level security with Supabase
-
-### 📊 **Smart Workflow Analysis**
-- Automatic detection of 50+ N8N node types
-- Dynamic form generation for required credentials
-- Workflow complexity metrics and validation
-- Duplicate deployment prevention
 
 ## 🏗️ Architecture
 
@@ -102,30 +98,31 @@ graph TB
    cp .env.example .env
    # Edit .env with your actual configuration values
    ```
-# Supabase Configuration
-SUPABASE_URL=https://your-project-id.supabase.co
-SUPABASE_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_KEY=your_supabase_service_role_key
-
-# N8N Configuration
-X_N8N_API_KEY=your_n8n_api_key
-N8N_BASE_URL=https://your-n8n-instance.com
-N8N_USERNAME=your_n8n_username
-N8N_PASSWORD=your_n8n_password
-
-# MCP Router Configuration
-N8N_BUILDER_URL=http://localhost:6545
-
-# Server Configuration
-FLASK_HOST=0.0.0.0
-FLASK_PORT=5000
-MCP_HOST=0.0.0.0
-MCP_PORT=6545
-
-# Optional: Authentication credentials (auto-populated)
-N8N_AUTH=
-N8N_BROWSER_ID=   
-```
+    ```.env
+    # Supabase Configuration
+    SUPABASE_URL=https://your-project-id.supabase.co
+    SUPABASE_KEY=your_supabase_anon_key
+    SUPABASE_SERVICE_KEY=your_supabase_service_role_key
+    
+    # N8N Configuration
+    X_N8N_API_KEY=your_n8n_api_key
+    N8N_BASE_URL=https://your-n8n-instance.com
+    N8N_USERNAME=your_n8n_username
+    N8N_PASSWORD=your_n8n_password
+    
+    # MCP Router Configuration
+    N8N_BUILDER_URL=http://localhost:6545
+    
+    # Server Configuration
+    FLASK_HOST=0.0.0.0
+    FLASK_PORT=5000
+    MCP_HOST=0.0.0.0
+    MCP_PORT=6545
+    
+    # Optional: Authentication credentials (auto-populated)
+    N8N_AUTH=
+    N8N_BROWSER_ID=   
+    ```
 
 5. **Start both servers**
    ```bash
@@ -203,7 +200,6 @@ N8N-Agent-Marketplace/
 ├── main.py                        # Unified server startup script
 ├── requirements.txt               # Consolidated Python dependencies
 ├── .env                          # Environment configuration (shared)
-├── setup_database.py             # Database initialization
 │
 ├── agent_marketplace/             # Flask web application
 │   ├── app.py                    # Main Flask app with API endpoints
