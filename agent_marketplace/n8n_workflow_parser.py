@@ -228,109 +228,157 @@ class N8NWorkflowParser:
         credentials = node.get('credentials', {})
         
         if credentials:
-            # Extract the first credential type from the node
+            # Process each credential type in the node
             for cred_type, cred_data in credentials.items():
-                # Extract service name from credential type
-                service_name = self._extract_service_name(cred_type, node_type, node)
-                
-                # Determine required fields based on credential type and node type
-                required_fields = self._determine_required_fields(cred_type, node_type, node)
-                
-                return {
-                    'service_name': service_name,
-                    'credential_type': cred_type,
-                    'required_fields': required_fields,
-                    'description': f'{service_name} credentials'
-                }
+                # Check if credential has actual data (id and name)
+                if isinstance(cred_data, dict) and cred_data.get('id') and cred_data.get('name'):
+                    # Extract service name from credential type or credential name
+                    service_name = self._extract_service_name(cred_type, node_type, node)
+                    
+                    # For credentials with actual data, we can infer the service type better
+                    # Use the credential name to get more context if available
+                    cred_name = cred_data.get('name', '')
+                    if cred_name:
+                        # Try to extract more meaningful service name from the credential name
+                        service_name = self._extract_service_from_cred_name(cred_name, cred_type, service_name)
+                    
+                    # Determine required fields based on credential type and node type
+                    required_fields = self._determine_required_fields(cred_type, node_type, node)
+                    
+                    return {
+                        'service_name': service_name,
+                        'credential_type': cred_type,
+                        'required_fields': required_fields,
+                        'description': f'{service_name} credentials',
+                        'credential_id': cred_data.get('id'),
+                        'credential_name': cred_data.get('name')
+                    }
         
         # Special case: if node has empty credentials object, it likely needs credentials
-        # This is common with langchain nodes that have credentials: {} but aren't configured
+        # But skip this for agent nodes as they don't need direct credentials
         if 'credentials' in node and isinstance(node['credentials'], dict):
             empty_creds = node['credentials']
             if len(empty_creds) == 0 or all(not v for v in empty_creds.values()):
+                # Skip agent nodes that don't actually need credentials
+                if 'agent' in node_type.lower():
+                    return None
                 # print(f"    🎯 Node has empty credentials object - detecting service by node type")
                 service_info = self._get_service_info_from_node_type(node_type, node)
                 if service_info:
                     return service_info
         
         # Fallback: Check if this node type typically requires credentials based on common patterns
-        service_info = self._get_service_info_from_node_type(node_type, node)
-        if service_info:
-            return service_info
+        # But only if the node actually has a credentials field (even if empty)
+        if 'credentials' in node:
+            service_info = self._get_service_info_from_node_type(node_type, node)
+            if service_info:
+                return service_info
         
         return None
     
     def _get_service_info_from_node_type(self, node_type: str, node: Dict) -> Optional[Dict]:
         """Determine if a node type typically requires credentials even if not explicitly defined"""
+        # This method should only be used as a last resort when no credentials are found
+        # Since we're focusing on dynamic extraction, we'll only handle special cases
+        
         node_type_lower = node_type.lower()
-        
-                 # Common service patterns that usually require credentials
-        service_patterns = {
-            'openai': {'service': 'OpenAI', 'type': 'openAiApi', 'fields': ['api_key']},
-            'anthropic': {'service': 'Anthropic Claude', 'type': 'anthropicApi', 'fields': ['api_key']},
-            'claude': {'service': 'Anthropic Claude', 'type': 'anthropicApi', 'fields': ['api_key']},
-            'google': {'service': 'Google', 'type': 'googleOAuth2', 'fields': ['client_id', 'client_secret']},
-            'gmail': {'service': 'Gmail', 'type': 'gmailOAuth2', 'fields': ['client_id', 'client_secret']},
-            'slack': {'service': 'Slack', 'type': 'slackApi', 'fields': ['access_token']},
-            'discord': {'service': 'Discord', 'type': 'discordApi', 'fields': ['bot_token']},
-            'telegram': {'service': 'Telegram', 'type': 'telegramApi', 'fields': ['access_token']},
-            'notion': {'service': 'Notion', 'type': 'notionApi', 'fields': ['api_key']},
-            'airtable': {'service': 'Airtable', 'type': 'airtableApi', 'fields': ['api_key']},
-            'twitter': {'service': 'Twitter', 'type': 'twitterOAuth2', 'fields': ['api_key', 'api_secret']},
-            'linkedin': {'service': 'LinkedIn', 'type': 'linkedInOAuth2', 'fields': ['client_id', 'client_secret']},
-            'stripe': {'service': 'Stripe', 'type': 'stripeApi', 'fields': ['secret_key']},
-            'paypal': {'service': 'PayPal', 'type': 'payPalApi', 'fields': ['client_id', 'client_secret']},
-            'shopify': {'service': 'Shopify', 'type': 'shopifyApi', 'fields': ['shop_url', 'access_token']},
-            'hubspot': {'service': 'HubSpot', 'type': 'hubspotApi', 'fields': ['api_key']},
-            'salesforce': {'service': 'Salesforce', 'type': 'salesforceOAuth2', 'fields': ['client_id', 'client_secret']},
-            'zendesk': {'service': 'Zendesk', 'type': 'zendeskApi', 'fields': ['domain', 'email', 'api_token']},
-            'jira': {'service': 'Jira', 'type': 'jiraApi', 'fields': ['domain', 'email', 'api_token']},
-            'aws': {'service': 'AWS', 'type': 'awsApi', 'fields': ['access_key_id', 'secret_access_key']},
-            'azure': {'service': 'Azure', 'type': 'azureApi', 'fields': ['client_id', 'client_secret', 'tenant_id']},
-            'dropbox': {'service': 'Dropbox', 'type': 'dropboxOAuth2', 'fields': ['access_token']},
-            'box': {'service': 'Box', 'type': 'boxOAuth2', 'fields': ['client_id', 'client_secret']},
-            'onedrive': {'service': 'OneDrive', 'type': 'microsoftOAuth2', 'fields': ['client_id', 'client_secret']},
-            'trello': {'service': 'Trello', 'type': 'trelloApi', 'fields': ['api_key', 'api_token']},
-            'asana': {'service': 'Asana', 'type': 'asanaApi', 'fields': ['access_token']},
-            'monday': {'service': 'Monday.com', 'type': 'mondayApi', 'fields': ['api_token']},
-            'clickup': {'service': 'ClickUp', 'type': 'clickUpApi', 'fields': ['access_token']},
-            'github': {'service': 'GitHub', 'type': 'githubApi', 'fields': ['access_token']},
-            'gitlab': {'service': 'GitLab', 'type': 'gitlabApi', 'fields': ['access_token']},
-            'bitbucket': {'service': 'Bitbucket', 'type': 'bitbucketApi', 'fields': ['username', 'app_password']},
-            # Langchain-specific patterns
-            'qdrant': {'service': 'Qdrant Vector Database', 'type': 'qdrantApi', 'fields': ['api_key', 'url']},
-            'ollama': {'service': 'Ollama', 'type': 'ollamaApi', 'fields': ['base_url']},
-            'vectorstore': {'service': 'Vector Store', 'type': 'vectorStoreApi', 'fields': ['api_key']},
-            'embeddings': {'service': 'Embeddings Provider', 'type': 'embeddingsApi', 'fields': ['api_key']},
-            'langchain': {'service': 'LangChain Service', 'type': 'langchainApi', 'fields': ['api_key']},
-        }
-        
-        # Check if any pattern matches the node type
-        for pattern, info in service_patterns.items():
-            if pattern in node_type_lower:
-                # print(f"    🎯 Detected {info['service']} node by pattern matching")
-                return {
-                    'service_name': info['service'],
-                    'credential_type': info['type'],
-                    'required_fields': info['fields'],
-                    'description': f'{info["service"]} credentials (detected from node type)'
-                }
         
         # Check for HTTP nodes that might need authentication
         if 'http' in node_type_lower and 'request' in node_type_lower:
             # Check if the node has authentication parameters that suggest it needs credentials
             parameters = node.get('parameters', {})
-            if any(key in str(parameters).lower() for key in ['auth', 'token', 'key', 'bearer', 'basic']):
-                # print(f"    🎯 Detected HTTP node with authentication")
+            authentication = parameters.get('authentication', '')
+            
+            if authentication or any(key in str(parameters).lower() for key in ['auth', 'token', 'key', 'bearer', 'basic']):
                 return {
                     'service_name': 'HTTP API',
-                    'credential_type': 'httpBasicAuth',
-                    'required_fields': ['username', 'password'],
-                    'description': 'HTTP API credentials (detected from authentication parameters)'
+                    'credential_type': 'httpAuth',
+                    'required_fields': self._determine_http_auth_fields(parameters),
+                    'description': 'HTTP API credentials'
                 }
         
+        # For all other cases, return None since we want to rely on actual credentials in the workflow
         return None
     
+    def _determine_http_auth_fields(self, parameters: Dict) -> List[str]:
+        """Determine required fields for HTTP authentication based on parameters"""
+        auth_type = parameters.get('authentication', '').lower()
+        
+        if 'basic' in auth_type:
+            return ['username', 'password']
+        elif 'bearer' in auth_type or 'token' in auth_type:
+            return ['token']
+        elif 'oauth' in auth_type:
+            return ['client_id', 'client_secret']
+        else:
+            # Default to basic auth fields
+            return ['username', 'password']
+    
+    def _extract_service_from_cred_name(self, cred_name: str, cred_type: str, fallback_service: str) -> str:
+        """Extract service name from credential name with pattern matching"""
+        # Common patterns in credential names
+        # Example: "OpenAi_cred_system_1752747773" -> "OpenAI"
+        # Example: "ClickUp account" -> "ClickUp"
+        
+        # Remove common suffixes and prefixes
+        cleaned_name = cred_name
+        for pattern in ['_cred_system_', '_cred_', '_account', ' account', ' Account', '_api', ' API', 
+                       '_credential', ' credential', ' Credential', '_token', ' token', ' Token']:
+            if pattern in cleaned_name:
+                cleaned_name = cleaned_name.split(pattern)[0]
+        
+        # Remove trailing numbers and underscores
+        cleaned_name = re.sub(r'[_\d]+$', '', cleaned_name).strip()
+        
+        # Handle underscores as word separators
+        cleaned_name = cleaned_name.replace('_', ' ')
+        
+        # Handle camelCase and PascalCase
+        # Insert spaces before capital letters
+        cleaned_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', cleaned_name)
+        cleaned_name = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1 \2', cleaned_name)
+        
+        # If we got a meaningful name, use it
+        if cleaned_name and len(cleaned_name) > 2:
+            # Capitalize properly (handle special cases like "OpenAI")
+            words = cleaned_name.split()
+            formatted_words = []
+            skip_next = False
+            
+            for i, word in enumerate(words):
+                if skip_next:
+                    skip_next = False
+                    continue
+                    
+                word_lower = word.lower()
+                if word_lower == 'openai' or (word_lower == 'open' and i + 1 < len(words) and words[i + 1].lower() == 'ai'):
+                    formatted_words.append('OpenAI')
+                    # Skip the next word if it's 'ai'
+                    if i + 1 < len(words) and words[i + 1].lower() == 'ai':
+                        skip_next = True
+                elif word_lower == 'ai' and i > 0 and words[i - 1].lower() == 'open':
+                    continue  # Skip 'ai' if preceded by 'open'
+                elif word_lower == 'clickup' or (word_lower == 'click' and i + 1 < len(words) and words[i + 1].lower() == 'up'):
+                    formatted_words.append('ClickUp')
+                    # Skip the next word if it's 'up'
+                    if i + 1 < len(words) and words[i + 1].lower() == 'up':
+                        skip_next = True
+                elif word_lower == 'up' and i > 0 and words[i - 1].lower() == 'click':
+                    continue  # Skip 'up' if preceded by 'click'
+                elif word_lower == 'api':
+                    formatted_words.append('API')
+                elif word_lower == 'oauth' or word_lower == 'oauth2':
+                    formatted_words.append('OAuth')
+                elif word_lower in ['my', 'your', 'the', 'a', 'an']:
+                    # Skip common articles/possessives
+                    continue
+                elif word:  # Only add non-empty words
+                    formatted_words.append(word.title())
+            return ' '.join(formatted_words) if formatted_words else fallback_service
+        
+        # Otherwise, fall back to the provided service name
+        return fallback_service
+
     def _extract_service_name(self, cred_type: str, node_type: str, node: Dict) -> str:
         """Extract service name from credential type and node information"""
         # First, try to get it from the credential name in the node
@@ -339,61 +387,52 @@ class N8NWorkflowParser:
         cred_name = cred_data.get('name', '')
         
         if cred_name and cred_name != cred_type:
-            # Clean up the credential name to get service name
-            service_name = (cred_name
-                          .replace(' account', '').replace(' Account', '')
-                          .replace(' API', '').replace(' api', '')
-                          .replace(' Credential', '').replace(' credential', '')
-                          .replace(' Access Token', '').replace(' access token', '')
-                          .replace(' Token', '').replace(' token', '')
-                          .replace('Your ', '').replace('your ', '')
-                          .strip())
-            
-            # If it's still a meaningful name after cleanup, use it
-            if service_name and len(service_name) > 2:
-                return service_name
+            # Use the helper method to extract service name from credential name
+            return self._extract_service_from_cred_name(cred_name, cred_type, cred_type)
         
-        # Fallback: extract from credential type
-        if 'telegram' in cred_type.lower():
-            return 'Telegram'
-        elif 'openai' in cred_type.lower() or 'openAi' in cred_type:
-            return 'OpenAI'
-        elif 'google' in cred_type.lower():
-            service_part = cred_type.replace('google', '').replace('Api', '').replace('OAuth2', '').replace('api', '').strip()
-            return f"Google {service_part.title()}" if service_part else "Google"
-        elif 'notion' in cred_type.lower():
-            return 'Notion'
-        elif 'slack' in cred_type.lower():
-            return 'Slack'
-        elif 'discord' in cred_type.lower():
-            return 'Discord'
-        elif 'anthropic' in cred_type.lower() or 'claude' in cred_type.lower():
-            return 'Anthropic Claude'
-        else:
-            # Generic cleanup of credential type
-            return cred_type.replace('Api', '').replace('OAuth2', '').replace('api', '').title()
+        # Fallback: Clean up the credential type to make it readable
+        # Remove common suffixes and make it title case
+        service_name = cred_type
+        for suffix in ['Api', 'OAuth2', 'OAuth', 'Oauth2', 'api', 'oauth2', 'oauth']:
+            if service_name.endswith(suffix):
+                service_name = service_name[:-len(suffix)]
+        
+        # Handle camelCase and PascalCase
+        # Insert spaces before capital letters
+        import re
+        service_name = re.sub(r'([a-z])([A-Z])', r'\1 \2', service_name)
+        service_name = re.sub(r'([A-Z]+)([A-Z][a-z])', r'\1 \2', service_name)
+        
+        return service_name.strip().title()
     
     def _determine_required_fields(self, cred_type: str, node_type: str, node: Dict) -> List[str]:
         """Determine required fields based on credential type"""
         cred_lower = cred_type.lower()
         
+        # Check for OAuth patterns
         if 'oauth2' in cred_lower or 'oauth' in cred_lower:
-            return ['client_id', 'client_secret', 'refresh_token']
-        elif 'telegram' in cred_lower:
-            return ['access_token']
-        elif 'openai' in cred_lower:
-            return ['api_key']
-        elif 'anthropic' in cred_lower or 'claude' in cred_lower:
-            return ['api_key']
-        elif 'notion' in cred_lower:
-            return ['api_key']
+            return ['client_id', 'client_secret']
+        
+        # Check for basic auth patterns
         elif 'basicauth' in cred_lower or 'basic' in cred_lower:
             return ['username', 'password']
-        elif 'bearer' in cred_lower or 'token' in cred_lower:
+        
+        # Check for token-based auth
+        elif 'bearer' in cred_lower or 'token' in cred_lower or 'access' in cred_lower:
             return ['access_token']
-        else:
-            # Default to API key for unknown types
+        
+        # Check for API key patterns
+        elif 'api' in cred_lower or 'key' in cred_lower:
             return ['api_key']
+        
+        # Default fallback based on common patterns
+        else:
+            # If it ends with 'Api' it's likely an API key
+            if cred_type.endswith('Api') or cred_type.endswith('api'):
+                return ['api_key']
+            # Otherwise default to access token
+            else:
+                return ['access_token']
     
     def generate_credential_form_config(self, parsed_workflow: ParsedWorkflow) -> Dict[str, Any]:
         """Generate form configuration for credential setup"""
