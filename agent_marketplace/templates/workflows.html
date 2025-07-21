@@ -2928,7 +2928,6 @@
                                 <span style="color: ${statusColor};">${statusText}</span>
                             </div>
                             <div class="mcp-server-date">
-                                Created: ${createdDate}
                             </div>
                         </div>
                     </div>
@@ -2940,22 +2939,25 @@
 
         // Function to copy MCP URL to clipboard
         function copyMCPUrl(event, workflowId, mcpUrl, workflowName) {
-            // Create a formatted string with workflow name and ID
-            const formattedText = `${workflowName} (ID: ${workflowId})\n${mcpUrl}`;
-            
-            navigator.clipboard.writeText(formattedText).then(() => {
+            // Only copy the MCP URL path
+            navigator.clipboard.writeText(mcpUrl).then(() => {
                 // Update button to show success
-                const copyBtn = event.currentTarget;
-                const originalHTML = copyBtn.innerHTML;
+                const copyBtn = event.currentTarget || event.target;
                 
-                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                copyBtn.classList.add('copied');
-                
-                // Reset after 2 seconds
-                setTimeout(() => {
-                    copyBtn.innerHTML = originalHTML;
-                    copyBtn.classList.remove('copied');
-                }, 2000);
+                if (copyBtn) {
+                    const originalHTML = copyBtn.innerHTML;
+                    
+                    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    copyBtn.classList.add('copied');
+                    
+                    // Reset after 2 seconds
+                    setTimeout(() => {
+                        if (copyBtn) {
+                            copyBtn.innerHTML = originalHTML;
+                            copyBtn.classList.remove('copied');
+                        }
+                    }, 2000);
+                }
                 
                 showNotification('MCP server URL copied to clipboard!', 'success');
             }).catch(err => {
@@ -2963,6 +2965,7 @@
                 showNotification('Failed to copy URL: ' + err.message, 'error');
             });
         }
+
 
         // Function to display user-uploaded workflows
         function displayUserUploadedWorkflows(workflows) {
