@@ -40,7 +40,7 @@ graph TB
         A[Claude/Cursor/Super Chain]
     end
     
-    subgraph "N8N Agent Marketplace"
+    subgraph "N8N 2 MCP"
         B[Agent Marketplace<br/>Flask Web App]
         C[MCP Router<br/>FastAPI Service]
         D[Workflow Parser<br/>Analysis Engine]
@@ -77,8 +77,8 @@ graph TB
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Super-Chain/N8N-Agent-Marketplace.git
-   cd N8N-Agent-Marketplace
+   git clone https://github.com/Super-Chain/N8N2MCP.git
+   cd N8N2MCP
    ```
 
 2. **Install dependencies**
