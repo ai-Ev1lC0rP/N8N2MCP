@@ -3,9 +3,7 @@
 #### [🎯 Try the Live Demo](https://p2rdr5jbej.us-east-1.awsapprunner.com/)
 
 A comprehensive platform that converts N8N workflows into Model Context Protocol (MCP) servers, enabling seamless integration with AI assistants like Claude, Cursor, and other MCP-compatible platforms. Build powerful automation tools using N8N's visual workflow editor and deploy them as callable AI functions.
-
-<img width="1800" height="836" alt="Screenshot 2025-07-17 at 11 33 45 AM" src="https://github.com/user-attachments/assets/f8f49abb-00ce-4221-8bcf-5d27a7078a9a" />
-
+![Demo](demo.gif)
 
 ## ✨ How to use 
 
