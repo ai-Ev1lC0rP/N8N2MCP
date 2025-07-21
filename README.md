@@ -196,7 +196,7 @@ curl http://localhost:6545/list  # List all registered MCP servers
 ### Project Structure
 
 ```
-N8N-Agent-Marketplace/
+N8N2MCP/
 ├── main.py                        # Unified server startup script
 ├── requirements.txt               # Consolidated Python dependencies
 ├── .env                          # Environment configuration (shared)
