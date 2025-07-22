@@ -1,6 +1,8 @@
 
 <img width="512" height="128" alt="Screenshot 2025-07-21 at 5 38 29 PM" src="https://github.com/user-attachments/assets/057ec717-a61a-47af-9a54-e711e85ab4dd" />
 
+<a href="https://www.producthunt.com/products/n8n2mcp-n8n-workflow-into-mcp-servers?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-n8n2mcp" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=995941&theme=light&t=1753173693440" alt="N8N2MCP - Turn&#0032;your&#0032;N8N&#0032;workflow&#0032;to&#0032;MCP&#0032;servers&#0032;with&#0032;just&#0032;3&#0032;clicks | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
 #### Transform your N8N workflows into MCP servers instantly 
 #### [🎯 Try the Live Demo](https://p2rdr5jbej.us-east-1.awsapprunner.com/)
 
