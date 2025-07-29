@@ -430,5 +430,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [FastAPI](https://fastapi.tiangolo.com/) and [Flask](https://flask.palletsprojects.com/) for the web frameworks
 
 ---
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Super-Chain/N8N2MCP&type=Date)](https://www.star-history.com/#Super-Chain/N8N2MCP&Date)
 
 **Built with ❤️ by the SUPERCHAIN team for the AI automation community**
