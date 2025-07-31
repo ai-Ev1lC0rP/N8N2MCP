@@ -198,6 +198,7 @@ curl http://localhost:6545/list  # List all registered MCP servers
 
 ```
 N8N2MCP/
+├── Dockerfile                     # Docker configuration
 ├── main.py                        # Unified server startup script
 ├── requirements.txt               # Consolidated Python dependencies
 ├── .env                          # Environment configuration (shared)
@@ -207,9 +208,18 @@ N8N2MCP/
 │   ├── database.py               # Supabase integration & data models
 │   ├── n8n_workflow_parser.py    # Workflow analysis engine
 │   ├── setup_supabase.py         # Database setup utilities
+│   ├── static/                   # Static assets
+│   │   ├── css/                  # CSS files
+│   │   │   ├── main.css          # Main stylesheet
+│   │   │   └── variables.css     # CSS variables
+│   │   └── js/                   # JavaScript files
+│   │       ├── api.js            # API abstraction layer
+│   │       ├── main.js           # Main application logic
+│   │       └── ui.js             # UI management
 │   ├── templates/                # HTML templates
-│   │   ├── workflows.html        # Main marketplace interface
-│   │   └── static/               # CSS, JS assets
+│   │   ├── index.html          # Main application entry point
+│   │   ├── layout.html         # Base layout
+│   │   └── workflows.html      # Workflows page
 │   └── __init__.py               # Python package marker
 │
 ├── mcp_router/                   # FastAPI MCP service
